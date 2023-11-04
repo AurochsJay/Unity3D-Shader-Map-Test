@@ -64,7 +64,7 @@ public class Generator2D : MonoBehaviour
 
     private void Generate()
     {
-        random = new Random(); // Random에 시드값을 넣는 이유는 맵이 계속 바뀌게 하지 않을려고
+        random = new Random(0); // Random에 시드값을 넣는 이유는 맵이 계속 바뀌게 하지 않을려고
         grid = new Grid2D<CellType>(size, Vector2Int.zero);
         rooms = new List<Room>();
 
@@ -75,6 +75,7 @@ public class Generator2D : MonoBehaviour
         //모든복도생성
         CreateHallways();
         //사용할 복도만 생성
+        PathfindHallways();
 
     }
 
@@ -140,7 +141,7 @@ public class Generator2D : MonoBehaviour
         for (int i = 0; i < delaunay.Vertices.Count; i++)
         {
             Vector3 CheckPoint = new Vector3(delaunay.Vertices[i].Position.x, 0, delaunay.Vertices[i].Position.y);
-            Debug.DrawRay(CheckPoint, Vector3.up * 8f, Color.red, Mathf.Infinity);
+            //Debug.DrawRay(CheckPoint, Vector3.up * 8f, Color.red, Mathf.Infinity);
             //Debug.Log(delaunay.Vertices[i].Position);
         }
 
@@ -171,20 +172,112 @@ public class Generator2D : MonoBehaviour
         var remainingEdges = new HashSet<Prim.Edge>(edges);
         remainingEdges.ExceptWith(selectedEdges);
 
+        //점들끼리 연결된 것을 보여주기
+        //StartCoroutine(ShowLine(edges));
+
+        //Debug.DrawRay(remainingEdges[0].edg, Vector3.up * 3f, Color.blue, Mathf.Infinity);
+
         foreach (var edge in remainingEdges)
         {
-            Vector3 checkEdgePosition_U = new Vector3(edge.U.Position.x - 0.3f, 0, edge.U.Position.y);
+            Vector3 checkEdgePosition_U = new Vector3(edge.U.Position.x, 0, edge.U.Position.y);
             Vector3 checkEdgePosition_V = new Vector3(edge.V.Position.x, 0, edge.V.Position.y);
+            
+            //엣지 선이 어떻게 연결되었는지 Edge(U,V)
+            Debug.DrawLine(checkEdgePosition_U, checkEdgePosition_V, Color.blue, Mathf.Infinity);
 
-            Debug.DrawRay(checkEdgePosition_U, Vector3.up * 5f, Color.blue, Mathf.Infinity);
-            Debug.DrawRay(checkEdgePosition_V, Vector3.up * 5f, Color.green, Mathf.Infinity);
-            //Debug.Log("remainingEdges에 있는 edge들 : " + edge.ToString());
-            if (random.NextDouble() < 0.125)
+            if (random.NextDouble() < 0.125) // 버린다는 건가? 특정 엣지들을 고르는 건 알겠다.
+                                             // 문제는 왜 고르는거지? 모든 통로를 만드는건 비효율적이야
+                                             // 근데 랜덤한 식으로 통로를 구하면 어떤 방은 못가지 않나?
             {
                 selectedEdges.Add(edge);
+
+                //if문안에서 실행되는거니까 저 범위안에 있는 녀석들만 들어와서 실행되겠지.
+                Debug.DrawLine(checkEdgePosition_U, checkEdgePosition_V, Color.green, Mathf.Infinity);
                 //Debug.Log("SelectedEdges : " + edge.ToString());
-                //Debug.DrawRay(edge.U.Position, Vector3.up * 5f, Color.blue, Mathf.Infinity);
-                //Debug.DrawRay(edge.V.Position, Vector3.up * 5f, Color.green, Mathf.Infinity);
+                Debug.DrawRay(checkEdgePosition_U, Vector3.up * 13f, Color.black, Mathf.Infinity);
+                Debug.DrawRay(checkEdgePosition_V, Vector3.up * 15f, Color.white, Mathf.Infinity);
+                
+            }
+        }
+    }
+
+    private void PathfindHallways()
+    {
+        Pathfinder2D aStar = new Pathfinder2D(size);
+
+        foreach (var edge in selectedEdges)
+        {
+            /*
+             C#에서 as 키워드는 참조 형식을 다른 참조 형식으로 변환할 때 사용됩니다. 
+             as 키워드는 명시적으로 형변환을 시도하고, 실패하면 null을 반환합니다.
+
+             edge.U를 Vertex<Room> 형식으로 형변환하려 시도하고, 
+            성공하면 해당 Vertex<Room> 객체의 Item 속성에 접근하여 startRoom 변수에 할당합니다. 
+            만약 edge.U가 Vertex<Room> 형식이 아니라면 null이 startRoom에 할당됩니다.
+             */
+            var startRoom = (edge.U as Vertex<Room>).Item;
+            var endRoom = (edge.V as Vertex<Room>).Item;
+
+            var startPosf = startRoom.bounds.center; //임시로 부동소수점(float)으로 중앙값 받아옴
+            var endPosf = endRoom.bounds.center;
+            var startPos = new Vector2Int((int)startPosf.x, (int)startPosf.y);
+            var endPos = new Vector2Int((int)endPosf.x, (int)endPosf.y);
+
+            var path = aStar.FindPath(startPos, endPos, (Pathfinder2D.Node a, Pathfinder2D.Node b) =>
+            {
+                var pathCost = new Pathfinder2D.PathCost();
+
+                pathCost.cost = Vector2Int.Distance(b.Position, endPos); // heuristic
+
+                if (grid[b.Position] == CellType.Room)
+                {
+                    pathCost.cost += 10;
+                }
+                else if (grid[b.Position] == CellType.None)
+                {
+                    pathCost.cost += 5;
+                }
+                else if (grid[b.Position] == CellType.Hallway)
+                {
+                    pathCost.cost += 1;
+                }
+
+                pathCost.traversable = true;
+
+                return pathCost;
+            }
+            );
+
+
+            if (path != null)
+            {
+                for (int i = 0; i < path.Count; i++)
+                {
+                    var current = path[i];
+
+                    if (grid[current] == CellType.None)
+                    {
+                        grid[current] = CellType.Hallway; // 빈방이면 복도로 바꾼다.
+                    }
+
+                    if (i > 0)
+                    {
+                        var prev = path[i - 1];
+
+                        var delta = current - prev;
+                    }
+
+                }
+
+                foreach (var pos in path)
+                {
+                    if (grid[pos] == CellType.Hallway)
+                    {
+                        PlaceHallway(pos);
+                    }
+                }
+
+
             }
         }
     }
@@ -300,10 +393,52 @@ public class Generator2D : MonoBehaviour
 
     }
 
+    private void PlacePassageCube(Vector2Int location, Vector2Int size, Material material)
+    {
+        GameObject go = Instantiate(cubePrefab, new Vector3(location.x, 0.5f, location.y), Quaternion.identity);
+        go.GetComponent<Transform>().localScale = new Vector3(size.x, 1, size.y); // 방의 local scale 방 크기를 정할 수 있다.
+        //go.GetComponent<MeshRenderer>().material = material;
+    }
+
     private void PlaceRoom(Vector2Int location, Vector2Int size)
     {
         PlaceCube(location, size, redMaterial);
     }
 
-    
+    private void PlaceHallway(Vector2Int location)
+    {
+        PlacePassageCube(location, new Vector2Int(1, 1), blueMaterial);
+    }
+
+    private IEnumerator CreateHallway(Vector2Int location, Vector2Int size, Material material)
+    {
+
+        yield return new WaitForSeconds(0.3f);
+    }
+
+    //잠시 DrawLine 볼수있게 코루틴
+    private IEnumerator ShowLine(List<Prim.Edge> edges)
+    {
+        for (int i = 1; i < edges.Count; i++)
+        {
+
+            Vector3 checkEdgePosition_U = new Vector3(edges[i - 1].U.Position.x, 0, edges[i - 1].U.Position.y);
+            Vector3 checkEdgePosition_U2 = new Vector3(edges[i].U.Position.x, 0, edges[i].U.Position.y);
+            Vector3 checkEdgePosition_V = new Vector3(edges[i - 1].V.Position.x, 0, edges[i - 1].V.Position.y);
+            Vector3 checkEdgePosition_V2 = new Vector3(edges[i].V.Position.x, 0, edges[i].V.Position.y);
+
+            Debug.Log("첫번째 U의 포지션 : " + checkEdgePosition_U);
+            Debug.Log("두번째 U의 포지션 : " + checkEdgePosition_U2);
+
+            Debug.DrawLine(checkEdgePosition_U, checkEdgePosition_U2, Color.green, Mathf.Infinity);
+            Debug.DrawLine(checkEdgePosition_V, checkEdgePosition_V2, Color.blue, Mathf.Infinity);
+
+            yield return new WaitForSeconds(0.3f);
+        }
+
+
+    }
+
+
+
 }
