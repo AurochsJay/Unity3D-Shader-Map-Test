@@ -13,6 +13,15 @@ public class Generator2D : MonoBehaviour
         Hallway
     }
 
+    enum CellDirection
+    {
+        right,
+        left,
+        up,
+        down,
+        none
+    }
+
     class Room
     {
         public RectInt bounds;
@@ -42,9 +51,17 @@ public class Generator2D : MonoBehaviour
     [SerializeField] int roomCount;
     [SerializeField] Vector2Int roomMaxSize;
     [SerializeField] GameObject cubePrefab;
-    [SerializeField] private GameObject cornerPrefab;
+    [SerializeField] private GameObject cornerTopRightPrefab;
+    [SerializeField] private GameObject cornerTopLeftPrefab;
+    [SerializeField] private GameObject cornerBottomRightPrefab;
+    [SerializeField] private GameObject cornerBottomLeftPrefab;
     [SerializeField] private GameObject doorPrefab;
-    [SerializeField] private GameObject wallPrefab;
+    [SerializeField] private GameObject wallTopPrefab;
+    [SerializeField] private GameObject wallBottomPrefab;
+    [SerializeField] private GameObject wallRightPrefab;
+    [SerializeField] private GameObject wallLeftPrefab;
+    [SerializeField] private GameObject hallwayXPrefab;
+    [SerializeField] private GameObject hallwayYPrefab;
     [SerializeField] Material redMaterial;
     [SerializeField] Material blueMaterial;
 
@@ -57,6 +74,12 @@ public class Generator2D : MonoBehaviour
 
     //방 번호
     private int count = 1;
+    //통로 번호
+    private int countHall = 1;
+
+    //출입구 문 제거용 충돌체
+    //[SerializeField] private GameObject destroyObject;
+
     private void Start()
     {
         Generate();
@@ -183,7 +206,7 @@ public class Generator2D : MonoBehaviour
             Vector3 checkEdgePosition_V = new Vector3(edge.V.Position.x, 0, edge.V.Position.y);
             
             //엣지 선이 어떻게 연결되었는지 Edge(U,V)
-            Debug.DrawLine(checkEdgePosition_U, checkEdgePosition_V, Color.blue, Mathf.Infinity);
+            //Debug.DrawLine(checkEdgePosition_U, checkEdgePosition_V, Color.blue, Mathf.Infinity);
 
             if (random.NextDouble() < 0.125) // 버린다는 건가? 특정 엣지들을 고르는 건 알겠다.
                                              // 문제는 왜 고르는거지? 모든 통로를 만드는건 비효율적이야
@@ -192,10 +215,10 @@ public class Generator2D : MonoBehaviour
                 selectedEdges.Add(edge);
 
                 //if문안에서 실행되는거니까 저 범위안에 있는 녀석들만 들어와서 실행되겠지.
-                Debug.DrawLine(checkEdgePosition_U, checkEdgePosition_V, Color.green, Mathf.Infinity);
+                //Debug.DrawLine(checkEdgePosition_U, checkEdgePosition_V, Color.green, Mathf.Infinity);
                 //Debug.Log("SelectedEdges : " + edge.ToString());
-                Debug.DrawRay(checkEdgePosition_U, Vector3.up * 13f, Color.black, Mathf.Infinity);
-                Debug.DrawRay(checkEdgePosition_V, Vector3.up * 15f, Color.white, Mathf.Infinity);
+                //Debug.DrawRay(checkEdgePosition_U, Vector3.up * 13f, Color.black, Mathf.Infinity);
+                //Debug.DrawRay(checkEdgePosition_V, Vector3.up * 15f, Color.white, Mathf.Infinity);
                 
             }
         }
@@ -215,19 +238,57 @@ public class Generator2D : MonoBehaviour
             성공하면 해당 Vertex<Room> 객체의 Item 속성에 접근하여 startRoom 변수에 할당합니다. 
             만약 edge.U가 Vertex<Room> 형식이 아니라면 null이 startRoom에 할당됩니다.
              */
-            var startRoom = (edge.U as Vertex<Room>).Item;
-            var endRoom = (edge.V as Vertex<Room>).Item;
+            var startRoom = (edge.U as Vertex<Room>).Item; // Vertex U가 edge의 시작점
+            var endRoom = (edge.V as Vertex<Room>).Item; // Vertex V가 edge의 도착점
 
             var startPosf = startRoom.bounds.center; //임시로 부동소수점(float)으로 중앙값 받아옴
             var endPosf = endRoom.bounds.center;
             var startPos = new Vector2Int((int)startPosf.x, (int)startPosf.y);
             var endPos = new Vector2Int((int)endPosf.x, (int)endPosf.y);
 
+            Vector3 startpositon = new Vector3(startPos.x, 1.6f, startPos.y);
+            Vector3 endpositon = new Vector3(endPos.x, 1.6f, endPos.y);
+            Debug.DrawLine(startpositon, endpositon, Color.red, Mathf.Infinity);
+            Debug.DrawRay(startpositon, Vector3.up*3f, Color.green, Mathf.Infinity);
+            Debug.DrawRay(endpositon, Vector3.up*2f, Color.blue, Mathf.Infinity);
+
+            bool isfirst = true;
+            bool issecond = true;
+            bool isthird = true;
+
+            Debug.Log("selectedEdges의 개수 : " + selectedEdges.Count);
+
+            //b는 현재 탐색중인 이웃 노드를 나타낸다. a는 기준노드겠지
+            /*
+             costFunction은 FindPath 함수에서 호출될 때, 현재 노드인 a와 이웃 노드인 b의 정보가 자동으로 전달됩니다. 
+            이때 a는 현재 탐색 중인 노드의 위치를 나타냅니다. 
+            따라서 a.Position은 현재 탐색 중인 노드의 위치가 됩니다.
+
+            이렇게 a가 시작 노드의 위치를 나타내는 것은 FindPath 함수 내부에서 시작 노드의 정보를 초기화하고, 우선순위 큐에 추가할 때 결정됩니다. 
+            시작 노드의 정보를 초기화한 후에 우선순위 큐에 넣을 때, a.Position에 해당하는 위치 정보를 사용하여 시작 노드의 위치를 설정합니다. 
+            그러면 이후 costFunction에서 a가 시작 노드를 나타내게 됩니다.
+             */
             var path = aStar.FindPath(startPos, endPos, (Pathfinder2D.Node a, Pathfinder2D.Node b) =>
             {
                 var pathCost = new Pathfinder2D.PathCost();
 
-                pathCost.cost = Vector2Int.Distance(b.Position, endPos); // heuristic
+                pathCost.cost = Vector2Int.Distance(b.Position, endPos); // heuristic // b의 위치가 어디인지?
+
+                //if(isfirst)
+                //{
+                //    Debug.DrawRay(new Vector3(b.Position.x, 0, b.Position.y), Vector3.up * 10f, Color.white, Mathf.Infinity);
+                //    isfirst = false;
+                //}
+                //else if(issecond)
+                //{
+                //    Debug.DrawRay(new Vector3(b.Position.x, 0, b.Position.y), Vector3.up * 10f, Color.black, Mathf.Infinity);
+                //    issecond = false;
+                //}
+                //else if (isthird)
+                //{
+                //    Debug.DrawRay(new Vector3(b.Position.x, 0, b.Position.y), Vector3.up * 10f, Color.magenta, Mathf.Infinity);
+                //    isthird = false;
+                //}
 
                 if (grid[b.Position] == CellType.Room)
                 {
@@ -254,17 +315,125 @@ public class Generator2D : MonoBehaviour
                 for (int i = 0; i < path.Count; i++)
                 {
                     var current = path[i];
+                    //Debug.DrawRay(new Vector3(current.x, 0, current.y), Vector3.up * 10f, Color.cyan, Mathf.Infinity);
 
                     if (grid[current] == CellType.None)
                     {
                         grid[current] = CellType.Hallway; // 빈방이면 복도로 바꾼다.
+
+                        
+
+                        if(grid[path[i-1]] == CellType.Room)
+                        {
+                            Debug.DrawRay(new Vector3(path[i-1].x, 0, path[i-1].y), Vector3.up * 5f, Color.black, Mathf.Infinity);
+                            Debug.Log("i-1번째(첫 통로방의 이전)는 방이다");
+
+                            Vector3 prevPos = new Vector3(path[i - 1].x, 0.5f, path[i - 1].y);
+
+                            RaycastHit hit;
+
+                            if(Physics.Raycast(prevPos,Vector3.up, out hit, 0.5f))
+                            {
+                                Destroy(hit.transform.gameObject);
+                            }
+
+                            if (Physics.Raycast(prevPos, Vector3.down, out hit, 0.5f))
+                            {
+                                Destroy(hit.transform.gameObject);
+                            }
+
+                            if (Physics.Raycast(prevPos, Vector3.forward, out hit, 0.5f))
+                            {
+                                Destroy(hit.transform.gameObject);
+                            }
+
+                            if (Physics.Raycast(prevPos, Vector3.back, out hit, 0.5f))
+                            {
+                                Destroy(hit.transform.gameObject);
+                            }
+
+                            if (Physics.Raycast(prevPos, Vector3.right, out hit, 0.5f))
+                            {
+                                Destroy(hit.transform.gameObject);
+                            }
+
+                            if (Physics.Raycast(prevPos, Vector3.left, out hit, 0.5f))
+                            {
+                                Destroy(hit.transform.gameObject);
+                            }
+
+
+                            GameObject RoomExit = Instantiate(cubePrefab, prevPos, Quaternion.identity);
+                        }
+
+                        if(grid[path[i+1]] == CellType.Room)
+                        {
+                            Debug.DrawRay(new Vector3(path[i + 1].x, 0, path[i + 1].y), Vector3.up * 5f, Color.white, Mathf.Infinity);
+                            Debug.Log("i+1번째(마지막 통로방의 다음)은 방이다");
+
+                            Vector3 nextPos = new Vector3(path[i + 1].x, 0.5f, path[i + 1].y);
+
+                            RaycastHit hit;
+
+                            if (Physics.Raycast(nextPos, Vector3.up, out hit, 0.5f))
+                            {
+                                Destroy(hit.transform.gameObject);
+                            }
+
+                            if (Physics.Raycast(nextPos, Vector3.down, out hit, 0.5f))
+                            {
+                                Destroy(hit.transform.gameObject);
+                            }
+
+                            if (Physics.Raycast(nextPos, Vector3.forward, out hit, 0.5f))
+                            {
+                                Destroy(hit.transform.gameObject);
+                            }
+
+                            if (Physics.Raycast(nextPos, Vector3.back, out hit, 0.5f))
+                            {
+                                Destroy(hit.transform.gameObject);
+                            }
+
+                            if (Physics.Raycast(nextPos, Vector3.right, out hit, 0.5f))
+                            {
+                                Destroy(hit.transform.gameObject);
+                            }
+
+                            if (Physics.Raycast(nextPos, Vector3.left, out hit, 0.5f))
+                            {
+                                Destroy(hit.transform.gameObject);
+                            }
+
+
+                            GameObject RoomEntrance = Instantiate(cubePrefab, nextPos, Quaternion.identity);
+                        }
+
                     }
 
-                    if (i > 0)
+                    if (i > 0 && i < path.Count-1)
                     {
+                        // 이전방 -> 현재방 -> 다음방, delta가 (1,0)이면 오른쪽, (-1,0)이면 왼쪽, (0,1)이면 위, (0,-1)이면 아래
                         var prev = path[i - 1];
 
-                        var delta = current - prev;
+                        var next = path[i + 1];
+
+                        var delta1 = current - prev;
+
+                        var delta2 = next - current;
+
+                        CellDirection delta1Dir;
+                        CellDirection delta2Dir;
+
+                        delta1Dir = CheckCellDirection(delta1);
+                        delta2Dir = CheckCellDirection(delta2);
+
+                        if(grid[current] == CellType.Hallway)
+                        {
+                            PlaceHallway(delta1Dir, delta2Dir, current);
+                        }
+
+
                     }
 
                 }
@@ -273,7 +442,7 @@ public class Generator2D : MonoBehaviour
                 {
                     if (grid[pos] == CellType.Hallway)
                     {
-                        PlaceHallway(pos);
+                        //PlaceHallway(pos);
                     }
                 }
 
@@ -316,57 +485,50 @@ public class Generator2D : MonoBehaviour
                     if (i == 0 && j == 0)
                     {
 
-                        GameObject cornerBL = Instantiate(cornerPrefab, createPos, Quaternion.identity);
-                        cornerBL.GetComponent<Transform>().rotation = Quaternion.Euler(0, -180, 0);
+                        GameObject cornerBL = Instantiate(cornerBottomLeftPrefab, createPos, Quaternion.identity);
                         cornerBL.gameObject.name = "Prefab_" + count + "cornerBL";
                         continue;
                     }
                     else if(i==0 && j == size.x-1)
                     {
-                        GameObject cornerBR = Instantiate(cornerPrefab, createPos, Quaternion.identity);
-                        cornerBR.GetComponent<Transform>().rotation = Quaternion.Euler(0, -270, 0);
+                        GameObject cornerBR = Instantiate(cornerBottomRightPrefab, createPos, Quaternion.identity);
                         cornerBR.gameObject.name = "Prefab_" + count + "cornerBR";
                         continue;
                     }
                     else if (i == size.y -1 && j == 0)
                     {
-                        GameObject cornerUL = Instantiate(cornerPrefab, createPos, Quaternion.identity);
-                        cornerUL.GetComponent<Transform>().rotation = Quaternion.Euler(0, -90, 0);
-                        cornerUL.gameObject.name = "Prefab_" + count + "cornerUL";
+                        GameObject cornerTL = Instantiate(cornerTopLeftPrefab, createPos, Quaternion.identity);
+                        cornerTL.gameObject.name = "Prefab_" + count + "cornerUL";
                         continue;
                     }
                     else if (i == size.y-1 && j == size.x - 1)
                     {
-                        GameObject cornerUR = Instantiate(cornerPrefab, createPos, Quaternion.identity);
-                        //cornerUR.GetComponent<Transform>().rotation = Quaternion.Euler(0, -180, 0);
-                        cornerUR.gameObject.name = "Prefab_" + count + "cornerUR";
+                        GameObject cornerTR = Instantiate(cornerTopRightPrefab, createPos, Quaternion.identity);
+                        cornerTR.gameObject.name = "Prefab_" + count + "cornerUR";
                         continue;
                     }
                     //벽
                     else if(i == 0 && (j != 0 || j != size.x-1))
                     {
-                        GameObject wallBottom = Instantiate(wallPrefab, createPos, Quaternion.identity);
-                        wallBottom.GetComponent<Transform>().rotation = Quaternion.Euler(0,90,0);
+                        GameObject wallBottom = Instantiate(wallBottomPrefab, createPos, Quaternion.identity);
                         wallBottom.gameObject.name = "Prefab_" + count + "wallBottom";
                         continue;
                     }
                     else if(i == size.y -1 && (j != 0 || j != size.x - 1))
                     {
-                        GameObject wallUp = Instantiate(wallPrefab, createPos, Quaternion.identity);
-                        wallUp.GetComponent<Transform>().rotation = Quaternion.Euler(0, 270, 0);
-                        wallUp.gameObject.name = "Prefab_" + count + "wallUp";
+                        GameObject wallTop = Instantiate(wallTopPrefab, createPos, Quaternion.identity);
+                        wallTop.gameObject.name = "Prefab_" + count + "wallUp";
                         continue;
                     }
                     else if ((i != 0 || i != size.y - 1) && j == 0)
                     {
-                        GameObject wallLeft = Instantiate(wallPrefab, createPos, Quaternion.identity);
-                        wallLeft.GetComponent<Transform>().rotation = Quaternion.Euler(0, 180, 0);
+                        GameObject wallLeft = Instantiate(wallLeftPrefab, createPos, Quaternion.identity);
                         wallLeft.gameObject.name = "Prefab_" + count + "wallLeft";
                         continue;
                     }
                     else if ((i != 0 || i != size.y - 1) && j == size.x - 1)
                     {
-                        GameObject wallRight = Instantiate(wallPrefab, createPos, Quaternion.identity);
+                        GameObject wallRight = Instantiate(wallRightPrefab, createPos, Quaternion.identity);
                         wallRight.gameObject.name = "Prefab_" + count + "wallRight";
                         continue;
                     }
@@ -398,6 +560,8 @@ public class Generator2D : MonoBehaviour
         GameObject go = Instantiate(cubePrefab, new Vector3(location.x, 0.5f, location.y), Quaternion.identity);
         go.GetComponent<Transform>().localScale = new Vector3(size.x, 1, size.y); // 방의 local scale 방 크기를 정할 수 있다.
         //go.GetComponent<MeshRenderer>().material = material;
+        go.gameObject.name = "Hall : " + countHall + "번째 생성";
+        countHall++;
     }
 
     private void PlaceRoom(Vector2Int location, Vector2Int size)
@@ -405,15 +569,106 @@ public class Generator2D : MonoBehaviour
         PlaceCube(location, size, redMaterial);
     }
 
+    //통로 생성
+    private void PlaceHallway(CellDirection delta1Dir, CellDirection delta2Dir, Vector2Int current)
+    {
+
+        if (delta1Dir == CellDirection.right)
+        {
+            if (delta2Dir == CellDirection.right) //오른쪽-오른쪽 : 일방향통로
+            {
+                //생성한다.
+                GameObject Hallway_Straight = Instantiate(hallwayXPrefab, new Vector3(current.x, 0.5f, current.y), Quaternion.identity);
+            }
+            else if (delta2Dir == CellDirection.up) // 오른쪽-위 : 꺾인 통로
+            {
+                GameObject Hallway_Corner = Instantiate(cornerBottomRightPrefab, new Vector3(current.x, 0.5f, current.y), Quaternion.identity);
+            }
+            else if (delta2Dir == CellDirection.down) // 오른쪽-아래 : 꺾인 통로
+            {
+                GameObject Hallway_Corner = Instantiate(cornerTopRightPrefab, new Vector3(current.x, 0.5f, current.y), Quaternion.identity);
+            }
+        }
+        else if (delta1Dir == CellDirection.left)
+        {
+            if (delta2Dir == CellDirection.left) // 왼쪽-왼쪽
+            {
+                GameObject Hallway_Straight = Instantiate(hallwayXPrefab, new Vector3(current.x, 0.5f, current.y), Quaternion.identity);
+            }
+            else if (delta2Dir == CellDirection.up)
+            {
+                GameObject Hallway_Corner = Instantiate(cornerBottomLeftPrefab, new Vector3(current.x, 0.5f, current.y), Quaternion.identity);
+            }
+            else if (delta2Dir == CellDirection.down) 
+            {
+                GameObject Hallway_Corner = Instantiate(cornerTopLeftPrefab, new Vector3(current.x, 0.5f, current.y), Quaternion.identity);
+            }
+        }
+        else if (delta1Dir == CellDirection.up)
+        {
+            if (delta2Dir == CellDirection.right)
+            {
+                GameObject Hallway_Corner = Instantiate(cornerTopLeftPrefab, new Vector3(current.x, 0.5f, current.y), Quaternion.identity);
+            }
+            else if (delta2Dir == CellDirection.left)
+            {
+                GameObject Hallway_Corner = Instantiate(cornerTopRightPrefab, new Vector3(current.x, 0.5f, current.y), Quaternion.identity);
+            }
+            else if (delta2Dir == CellDirection.up)
+            {
+                GameObject Hallway_Straight = Instantiate(hallwayYPrefab, new Vector3(current.x, 0.5f, current.y), Quaternion.identity);
+            }
+        }
+        else if (delta1Dir == CellDirection.down)
+        {
+            if (delta2Dir == CellDirection.right)
+            {
+                GameObject Hallway_Corner = Instantiate(cornerBottomLeftPrefab, new Vector3(current.x, 0.5f, current.y), Quaternion.identity);
+            }
+            else if (delta2Dir == CellDirection.left)
+            {
+                GameObject Hallway_Corner = Instantiate(cornerBottomRightPrefab, new Vector3(current.x, 0.5f, current.y), Quaternion.identity);
+            }
+            else if (delta2Dir == CellDirection.down)
+            {
+                GameObject Hallway_Straight = Instantiate(hallwayYPrefab, new Vector3(current.x, 0.5f, current.y), Quaternion.identity);
+            }
+        }
+
+
+    }
+
     private void PlaceHallway(Vector2Int location)
     {
         PlacePassageCube(location, new Vector2Int(1, 1), blueMaterial);
     }
 
-    private IEnumerator CreateHallway(Vector2Int location, Vector2Int size, Material material)
+    private CellDirection CheckCellDirection(Vector2Int delta)
     {
+        CellDirection result;
 
-        yield return new WaitForSeconds(0.3f);
+        if(delta == Vector2Int.right)
+        {
+            result = CellDirection.right;
+        }
+        else if(delta == Vector2Int.left)
+        {
+            result = CellDirection.left;
+        }
+        else if(delta == Vector2Int.up)
+        {
+            result = CellDirection.up;
+        }
+        else if(delta == Vector2Int.down)
+        {
+            result = CellDirection.down;
+        }
+        else
+        {
+            result = CellDirection.none;
+        }
+
+        return result;
     }
 
     //잠시 DrawLine 볼수있게 코루틴
