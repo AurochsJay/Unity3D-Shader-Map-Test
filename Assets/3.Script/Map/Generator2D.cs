@@ -87,7 +87,7 @@ public class Generator2D : MonoBehaviour
 
     private void Generate()
     {
-        random = new Random(0); // Random에 시드값을 넣는 이유는 맵이 계속 바뀌게 하지 않을려고
+        random = new Random(); // Random에 시드값을 넣는 이유는 맵이 계속 바뀌게 하지 않을려고
         grid = new Grid2D<CellType>(size, Vector2Int.zero);
         rooms = new List<Room>();
 
@@ -322,91 +322,25 @@ public class Generator2D : MonoBehaviour
                         grid[current] = CellType.Hallway; // 빈방이면 복도로 바꾼다.
 
                         
-
                         if(grid[path[i-1]] == CellType.Room)
                         {
-                            Debug.DrawRay(new Vector3(path[i-1].x, 0, path[i-1].y), Vector3.up * 5f, Color.black, Mathf.Infinity);
+                            Debug.DrawRay(new Vector3(path[i-1].x, 0, path[i-1].y), Vector3.up * 4f, Color.black, Mathf.Infinity);
                             Debug.Log("i-1번째(첫 통로방의 이전)는 방이다");
 
                             Vector3 prevPos = new Vector3(path[i - 1].x, 0.5f, path[i - 1].y);
 
-                            RaycastHit hit;
-
-                            if(Physics.Raycast(prevPos,Vector3.up, out hit, 0.5f))
-                            {
-                                Destroy(hit.transform.gameObject);
-                            }
-
-                            if (Physics.Raycast(prevPos, Vector3.down, out hit, 0.5f))
-                            {
-                                Destroy(hit.transform.gameObject);
-                            }
-
-                            if (Physics.Raycast(prevPos, Vector3.forward, out hit, 0.5f))
-                            {
-                                Destroy(hit.transform.gameObject);
-                            }
-
-                            if (Physics.Raycast(prevPos, Vector3.back, out hit, 0.5f))
-                            {
-                                Destroy(hit.transform.gameObject);
-                            }
-
-                            if (Physics.Raycast(prevPos, Vector3.right, out hit, 0.5f))
-                            {
-                                Destroy(hit.transform.gameObject);
-                            }
-
-                            if (Physics.Raycast(prevPos, Vector3.left, out hit, 0.5f))
-                            {
-                                Destroy(hit.transform.gameObject);
-                            }
-
-
-                            GameObject RoomExit = Instantiate(cubePrefab, prevPos, Quaternion.identity);
+                            //방(Room)의 출입구 지우고 다시 만들기.
+                            RegenerateEntrance(prevPos);
                         }
 
                         if(grid[path[i+1]] == CellType.Room)
                         {
-                            Debug.DrawRay(new Vector3(path[i + 1].x, 0, path[i + 1].y), Vector3.up * 5f, Color.white, Mathf.Infinity);
+                            Debug.DrawRay(new Vector3(path[i + 1].x, 0, path[i + 1].y), Vector3.up * 6f, Color.white, Mathf.Infinity);
                             Debug.Log("i+1번째(마지막 통로방의 다음)은 방이다");
 
                             Vector3 nextPos = new Vector3(path[i + 1].x, 0.5f, path[i + 1].y);
 
-                            RaycastHit hit;
-
-                            if (Physics.Raycast(nextPos, Vector3.up, out hit, 0.5f))
-                            {
-                                Destroy(hit.transform.gameObject);
-                            }
-
-                            if (Physics.Raycast(nextPos, Vector3.down, out hit, 0.5f))
-                            {
-                                Destroy(hit.transform.gameObject);
-                            }
-
-                            if (Physics.Raycast(nextPos, Vector3.forward, out hit, 0.5f))
-                            {
-                                Destroy(hit.transform.gameObject);
-                            }
-
-                            if (Physics.Raycast(nextPos, Vector3.back, out hit, 0.5f))
-                            {
-                                Destroy(hit.transform.gameObject);
-                            }
-
-                            if (Physics.Raycast(nextPos, Vector3.right, out hit, 0.5f))
-                            {
-                                Destroy(hit.transform.gameObject);
-                            }
-
-                            if (Physics.Raycast(nextPos, Vector3.left, out hit, 0.5f))
-                            {
-                                Destroy(hit.transform.gameObject);
-                            }
-
-
-                            GameObject RoomEntrance = Instantiate(cubePrefab, nextPos, Quaternion.identity);
+                            RegenerateEntrance(nextPos);
                         }
 
                     }
@@ -635,6 +569,8 @@ public class Generator2D : MonoBehaviour
             }
         }
 
+        //두개의 복도 프리펩이 있는지 확인하고 두개라면 모든 방향으로 하나씩 제거. 두개인것은 위하고 아래, 또는 하나의 벽이다.
+        CheckOverlapHallway(current);
 
     }
 
@@ -669,6 +605,81 @@ public class Generator2D : MonoBehaviour
         }
 
         return result;
+    }
+
+    //방(Room)의 출입구 지우고 다시 만들기.
+    private void RegenerateEntrance(Vector3 Pos)
+    {
+        DeleteCube(Pos);
+
+        GameObject RoomEntrance = Instantiate(cubePrefab, Pos, Quaternion.identity);
+    }
+
+    //복도 겹치는거 확인하고 제거
+    private void CheckOverlapHallway(Vector2Int current)
+    {
+        Vector3 checkPos = new Vector3(current.x, 0.5f, current.y);
+
+        int checkCount = 0;
+
+        //위방향
+        Collider[] colliders = Physics.OverlapCapsule(checkPos, checkPos + Vector3.up * 0.5f, 0.1f);
+        foreach(Collider collider in colliders)
+        {
+            checkCount++;
+            if(checkCount >= 2)
+            {
+                Debug.Log("2개 이상 물체가 겹친데가 있다.");
+                DeleteCube(checkPos);
+            }
+        }
+
+        //checkCount = 0;
+        //colliders = Physics.OverlapCapsule(checkPos, checkPos + Vector3.down * 0.5f, 0.1f);
+        //foreach (Collider collider in colliders)
+        //{
+        //    checkCount++;
+        //    if (checkCount >= 2)
+        //    {
+        //        Destroy(collider.gameObject);
+        //    }
+        //}
+    }
+
+    //6방향 제거, up,down,right,left,forward,back
+    private void DeleteCube(Vector3 Pos)
+    {
+        RaycastHit hit;
+
+        if (Physics.Raycast(Pos, Vector3.up, out hit, 0.5f))
+        {
+            Destroy(hit.transform.gameObject);
+        }
+
+        if (Physics.Raycast(Pos, Vector3.down, out hit, 0.5f))
+        {
+            Destroy(hit.transform.gameObject);
+        }
+
+        if (Physics.Raycast(Pos, Vector3.forward, out hit, 0.5f))
+        {
+            Destroy(hit.transform.gameObject);
+        }
+
+        if (Physics.Raycast(Pos, Vector3.back, out hit, 0.5f))
+        {
+            Destroy(hit.transform.gameObject);
+        }
+
+        if (Physics.Raycast(Pos, Vector3.right, out hit, 0.5f))
+        {
+            Destroy(hit.transform.gameObject);
+        }
+
+        if (Physics.Raycast(Pos, Vector3.left, out hit, 0.5f))
+        {
+            Destroy(hit.transform.gameObject);
+        }
     }
 
     //잠시 DrawLine 볼수있게 코루틴
