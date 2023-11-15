@@ -41,6 +41,8 @@ public class Pathfinder2D
     HashSet<Node> closed; // 이미 탐색한 노드들의 집합을 나타내는 HashSet<Node>
     Stack<Vector2Int> stack; // 경로를 재구성할 때 사용할 스택
 
+    Grid2D<Node> gridEntrance;
+
     public Pathfinder2D(Vector2Int size)
     {
         grid = new Grid2D<Node>(size, Vector2Int.zero);
@@ -59,6 +61,17 @@ public class Pathfinder2D
             for(int y = 0; y < size.y; y++)
             {
                 grid[x, y] = new Node(new Vector2Int(x, y)); // 그리드 위치에 노드 위치, 노드 생성자는 받은 매개변수의 값을 포지션 그대로 사용
+            }
+        }
+
+        //마을-던전 통로에 사용할 그리드
+        gridEntrance = new Grid2D<Node>(size, Vector2Int.zero);
+
+        for(int x = 0; x < size.x; x++)
+        {
+            for (int y = 0; y < size.y; y++)
+            {
+                gridEntrance[x, y] = new Node(new Vector2Int(x, y)); 
             }
         }
     }
@@ -192,4 +205,72 @@ public class Pathfinder2D
         return result;
     }
 
+
+    private void ResetNodesToGate()
+    {
+        var size = gridEntrance.Size;
+
+        for (int x = 0; x < size.x; x++)
+        {
+            for (int y = 0; y < size.y; y++)
+            {
+                var node = gridEntrance[x, y];
+                node.Previous = null;
+                node.Cost = float.PositiveInfinity;
+            }
+        }
+    }
+    public List<Vector2Int> FindPathToGate(Vector2Int start, Vector2 end, Func<Node, Node, PathCost> costFunction)
+    {
+        ResetNodesToGate();
+        queue.Clear();
+        closed.Clear();
+
+        queue = new SimplePriorityQueue<Node, float>();
+        closed = new HashSet<Node>();
+
+        gridEntrance[start].Cost = 0;
+        queue.Enqueue(gridEntrance[start], 0); 
+
+        bool isqueue = true;
+
+        while (queue.Count > 0)
+        {
+            Node node = queue.Dequeue();
+            closed.Add(node);
+
+            if (node.Position == end)
+            {
+                return ReconstructPath(node);
+            }
+
+            foreach (var offset in neighbors) 
+            {
+                if (!gridEntrance.InBounds(node.Position + offset)) continue; 
+                var neighbor = gridEntrance[node.Position + offset]; 
+                if (closed.Contains(neighbor)) continue; 
+                var pathCost = costFunction(node, neighbor); 
+                if (!pathCost.traversable) continue; 
+
+                float newCost = node.Cost + pathCost.cost; 
+
+                if (newCost < neighbor.Cost) 
+                {
+                    neighbor.Previous = node; 
+                    neighbor.Cost = newCost; 
+
+                    if (queue.TryGetPriority(node, out float existingPriority)) 
+                    {
+                        queue.UpdatePriority(node, newCost);
+                    }
+                    else 
+                    {
+                        queue.Enqueue(neighbor, neighbor.Cost);
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
 }

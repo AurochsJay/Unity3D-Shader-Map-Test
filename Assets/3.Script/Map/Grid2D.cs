@@ -14,7 +14,7 @@ public class Grid2D<T>
         Size = size;
         Offset = offset;
 
-        data = new T[size.x * size.y];
+        data = new T[(size.x) * (size.y)];
     }
 
     //반환값이 int 1차원 배열이다. 하나의 값으로 반환함으로써 Room의 Index를 가져올 수 있다.
