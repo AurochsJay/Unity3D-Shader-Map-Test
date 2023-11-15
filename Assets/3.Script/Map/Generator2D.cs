@@ -81,6 +81,7 @@ public class Generator2D : MonoBehaviour
     [SerializeField] private GameObject hallwayCrossPrefab;
     [SerializeField] private GameObject roomCeilingPrefab;
     [SerializeField] private GameObject dungeonEntrancePrefab;
+    [SerializeField] private GameObject bossRoomPrefab;
     [SerializeField] Material redMaterial;
     [SerializeField] Material blueMaterial;
     
@@ -103,6 +104,8 @@ public class Generator2D : MonoBehaviour
 
     //보스방 포지션
     Vector2 bossRoomPosition = Vector2.zero;
+    float bossRoom_yMax = 0;
+    float bossRoom_xMax = 0;
 
 
     private void Start()
@@ -116,7 +119,7 @@ public class Generator2D : MonoBehaviour
         grid = new Grid2D<CellType>(size, Vector2Int.zero);
         rooms = new List<Room>();
 
-        sizeEntrance = new Vector2Int(size.x, 5);
+        sizeEntrance = new Vector2Int(size.x, 15);
         gridEntrance = new Grid2D<CellType>(sizeEntrance, Vector2Int.zero);
 
         //방생성
@@ -130,8 +133,8 @@ public class Generator2D : MonoBehaviour
         //마을에서 던전입구로
         PathfindDungeonGate();
         //보스방 생성
-        CreateBossRoom();
-        
+        //CreateBossRoom();
+        Invoke("CreateBossRoom", 0.1f);
 
     }
 
@@ -141,7 +144,7 @@ public class Generator2D : MonoBehaviour
 
         for (int i =0; i<roomCount;i++)
         {
-            Vector2Int location = new Vector2Int(random.Next(0, size.x), random.Next(0, size.y));
+            Vector2Int location = new Vector2Int(random.Next(0, size.x), random.Next(2, size.y));
             Vector2Int roomSize = new Vector2Int(random.Next(6, roomMaxSize.x + 1), random.Next(6, roomMaxSize.y + 1));
 
             bool add = true;
@@ -517,7 +520,7 @@ public class Generator2D : MonoBehaviour
                     if (gridEntrance[current] == CellType.Hallway)
                     {
                         PlaceHallway(delta1Dir, delta2Dir, current, parent);
-                        Vector3 currentPos = new Vector3(current.x * 3, 2f, current.y * 3) - new Vector3(10f, 0, 80f);
+                        Vector3 currentPos = new Vector3(current.x * 3, 2f, current.y * 3) - new Vector3(10f, 0.5f, 80f);
                         Debug.DrawRay(currentPos, Vector3.up * 10f, Color.red, Mathf.Infinity);
                         //이 지점에서 던전입구를 가능하게 한다.
                         if(!canUseDungeonEntrance)
@@ -571,17 +574,58 @@ public class Generator2D : MonoBehaviour
     //보스방 만들기
     private void CreateBossRoom()
     {
-        Vector3 bossRoomPos = new Vector3(bossRoomPosition.x, 6f, bossRoomPosition.y) + new Vector3(-10f,0,-80f);
-        Debug.DrawRay(bossRoomPos, Vector3.up * 30f, Color.white, Mathf.Infinity);
+        Vector3 offset = new Vector3(-10f, 0, -80f);
+        RaycastHit hit;
 
+        Vector3 bossRoomPos = new Vector3((int)bossRoomPosition.x * 3, 6f, (int)bossRoomPosition.y * 3) + offset;
+        Debug.DrawRay(bossRoomPos - Vector3.up * 5, Vector3.up * 30f, Color.white, Mathf.Infinity);
 
+        //보스방 사이즈 반
+        int halfSize_x = (int)bossRoom_xMax - (int)bossRoomPosition.x;
+        int halfSize_z = (int)bossRoom_yMax - (int)bossRoomPosition.y;
+
+        if(Physics.Raycast(bossRoomPos, Vector3.up, out hit, 100f))
+        {
+            Debug.Log("보스방에서 위로 쐈을때 맞은 녀석 이름 : " + hit.transform.gameObject.name);
+            Destroy(hit.transform.gameObject);
+        }
+
+        if (Physics.Raycast(bossRoomPos - Vector3.up*3, Vector3.back, out hit, 100f)) // z축
+        {
+            Debug.Log("보스방 레이 맞은 녀석 이름 : " + hit.transform.gameObject.name + "위치 : " + hit.transform.position);
+            if(!(hit.transform.gameObject.name == "Wall_01"))
+            {
+                GameObject bossRoom = Instantiate(bossRoomPrefab, bossRoomPos + new Vector3(0,0,halfSize_z*3), Quaternion.identity);
+                bossRoom.GetComponent<Transform>().rotation = Quaternion.Euler(0, 180, 0);
+            }
+            else if (Physics.Raycast(bossRoomPos - Vector3.up * 3, Vector3.left, out hit, 100f)) // x축
+            {
+                Debug.Log("else if 보스방 레이 맞은 녀석 이름 : " + hit.transform.gameObject.name + "위치 : " + hit.transform.position);
+                if (!(hit.transform.gameObject.name == "Wall_01"))
+                {
+                    GameObject bossRoom = Instantiate(bossRoomPrefab, bossRoomPos + new Vector3(halfSize_x * 3, 0, 0), Quaternion.identity);
+                    bossRoom.GetComponent<Transform>().rotation = Quaternion.Euler(0, 270, 0);
+                }
+                else if (Physics.Raycast(bossRoomPos - Vector3.up * 3, Vector3.right, out hit, 100f)) // x축
+                {
+                    Debug.Log("else if의 else if 보스방 레이 맞은 녀석 이름 : " + hit.transform.gameObject.name + "위치 : " + hit.transform.position);
+                    if (!(hit.transform.gameObject.name == "Wall_01"))
+                    {
+                        GameObject bossRoom = Instantiate(bossRoomPrefab, bossRoomPos - new Vector3(halfSize_x * 3, 0, 0), Quaternion.identity);
+                        bossRoom.GetComponent<Transform>().rotation = Quaternion.Euler(0, 90, 0);
+                    }
+                }
+            }
+        }
+        
     }
 
     //보스방 찾기
     private void FindBossRoom(Room newRoom)
     {
-        if (bossRoomPosition.y <= newRoom.bounds.yMax)
+        if (bossRoom_yMax <= newRoom.bounds.yMax)
         {
+            bossRoom_yMax = newRoom.bounds.yMax;
             bossRoomPosition.y = newRoom.bounds.center.y;
 
             //y 포지션이 같을 경우에 x가 더 큰게 보스위치
@@ -591,6 +635,7 @@ public class Generator2D : MonoBehaviour
             }
 
             bossRoomPosition.x = newRoom.bounds.center.x;
+            bossRoom_xMax = newRoom.bounds.xMax;
         }
     }
 
@@ -627,7 +672,7 @@ public class Generator2D : MonoBehaviour
                 //행
                 for (int j = 0; j < size.x; j++)
                 {
-                    Vector3 createPos = new Vector3(location.x*3, 2f, location.y*3) + new Vector3(j*3, 0, i*3) - new Vector3(10f,0,80f);
+                    Vector3 createPos = new Vector3(location.x*3, 2f, location.y*3) + new Vector3(j*3, 0, i*3) - new Vector3(10f,0.5f,80f);
 
                     int index;
                     int rand = random.Next(0, 10);
@@ -741,7 +786,7 @@ public class Generator2D : MonoBehaviour
     //통로 생성
     private void PlaceHallway(CellDirection delta1Dir, CellDirection delta2Dir, Vector2Int current, GameObject parent)
     {
-        Vector3 createPos = new Vector3(current.x*3, 2f, current.y*3) - new Vector3(10f,0,80f);
+        Vector3 createPos = new Vector3(current.x*3, 2f, current.y*3) - new Vector3(10f,0.5f,80f);
 
         //던전입구용 enum변수
         HallwayCellPrefab hallwaycell;
@@ -883,7 +928,7 @@ public class Generator2D : MonoBehaviour
     //방(Room)의 출입구 지우고 다시 만들기.
     private void RegenerateEntrance(Vector3 Pos, GameObject parent)
     {
-        Pos = new Vector3(Pos.x *3, Pos.y, Pos.z *3) - new Vector3(10f,0,80f);
+        Pos = new Vector3(Pos.x *3, Pos.y, Pos.z *3) - new Vector3(10f,0.5f,80f);
 
         DeleteCube(Pos);
 

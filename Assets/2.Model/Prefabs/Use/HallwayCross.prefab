@@ -187,7 +187,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4280750895763759656, guid: 6e4788937d86779439a491c12c168906, type: 3}
       propertyPath: m_Name
-      value: Wall_01
+      value: CrossWall_01
       objectReference: {fileID: 0}
     m_RemovedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 6e4788937d86779439a491c12c168906, type: 3}
